@@ -6,8 +6,6 @@
 <meta name="theme-color" content="#0f172a">
 <title>Master Command</title>
 <link rel="manifest" href="manifest.json">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#2563eb">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -60,6 +58,13 @@ body{padding-bottom:calc(76px + env(safe-area-inset-bottom))}
 .update-bar{display:none;margin:8px 12px 0;padding:10px 12px;border-radius:14px;background:#111827;color:#fff;font-size:13px;align-items:center;justify-content:space-between;gap:10px}
 .update-bar.show{display:flex}.update-bar button{border:0;border-radius:9px;padding:7px 10px;font-weight:700}
 @media(min-width:700px){body{padding-bottom:20px}.app-install,.update-bar{max-width:760px;margin-left:auto;margin-right:auto}}
+
+
+.pwa-diagnostic{margin:16px 12px 100px;padding:16px;border:1px solid #e5e7eb;border-radius:18px;background:var(--card,#fff);box-shadow:0 5px 20px rgba(15,23,42,.05)}
+.pwa-diagnostic h3{margin:0 0 6px;font-size:16px}.pwa-diagnostic p{margin:0 0 12px;font-size:12px;color:#64748b}
+.pwa-check{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid #eef2f7;font-size:13px}.pwa-check:last-child{border-bottom:0}
+.pwa-ok{color:#16a34a;font-weight:700}.pwa-bad{color:#dc2626;font-weight:700}
+.pwa-tools{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}.pwa-tools button{border:0;border-radius:10px;padding:9px 11px;font-weight:700}
 
 </style>
 </head>
@@ -291,6 +296,49 @@ if ("serviceWorker" in navigator) {
 
   // Expose a small native-like helper for the existing UI.
   window.masterCommandToast = showToast;
+})();
+</script>
+
+
+<section class="pwa-diagnostic" id="pwaDiagnostic">
+  <h3>📱 Status PWA</h3>
+  <p>Periksa apakah deployment ini siap dipasang sebagai aplikasi.</p>
+  <div id="pwaChecks"></div>
+  <div class="pwa-tools">
+    <button type="button" id="pwaRefresh">Periksa ulang</button>
+    <button type="button" id="pwaClear">Bersihkan cache PWA</button>
+  </div>
+</section>
+
+
+<script>
+(function(){
+  const box=document.getElementById('pwaChecks');
+  if(!box)return;
+  const row=(label,ok)=>`<div class="pwa-check"><span>${label}</span><span class="${ok?'pwa-ok':'pwa-bad'}">${ok?'🟢 OK':'🔴 Gagal'}</span></div>`;
+  async function check(){
+    let manifestOK=false, i192=false, i512=false, swOK=false;
+    const secure=location.protocol==='https:'||location.hostname==='localhost'||location.hostname==='127.0.0.1';
+    try{
+      const link=document.querySelector('link[rel="manifest"]');
+      const r=link?await fetch(link.href,{cache:'no-store'}):null;
+      if(r&&r.ok){
+        const m=await r.json();
+        manifestOK=!!(m.name||m.short_name)&&!!m.start_url&&m.display==='standalone'
+          &&Array.isArray(m.icons)&&m.icons.some(x=>x.sizes==='192x192')
+          &&m.icons.some(x=>x.sizes==='512x512')&&m.prefer_related_applications!==true;
+      }
+    }catch(e){}
+    try{i192=(await fetch('/icon-192.png',{cache:'no-store'})).ok;i512=(await fetch('/icon-512.png',{cache:'no-store'})).ok;}catch(e){}
+    try{swOK=!!(await navigator.serviceWorker?.getRegistration?.());}catch(e){}
+    box.innerHTML=row('HTTPS',secure)+row('Manifest',manifestOK)+row('Icon 192×192 PNG',i192)+row('Icon 512×512 PNG',i512)+row('Service Worker',swOK);
+  }
+  document.getElementById('pwaRefresh')?.addEventListener('click',check);
+  document.getElementById('pwaClear')?.addEventListener('click',async()=>{
+    try{for(const r of await navigator.serviceWorker.getRegistrations())await r.unregister();for(const k of await caches.keys())await caches.delete(k);}catch(e){}
+    location.reload();
+  });
+  check();
 })();
 </script>
 
